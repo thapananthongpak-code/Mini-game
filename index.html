@@ -617,6 +617,17 @@ function addTree(x,z,s=1,lcolor=0x2a6a22){
 
 // ── House ──
 const houseGrp=new THREE.Group();houseGrp.position.set(7,2,-10);scene.add(houseGrp);
+
+// ── Drivable Car ──
+const pCar = new THREE.Group();
+const carM=new THREE.MeshStandardMaterial({color:0xff2200,flatShading:true,roughness:.4,metalness:.3});
+const cbody=new THREE.Mesh(new THREE.BoxGeometry(3.6,.85,1.8),carM);cbody.position.y=.6;cbody.castShadow=true;pCar.add(cbody);
+const ctop=new THREE.Mesh(new THREE.BoxGeometry(2.4,.75,1.7),carM);ctop.position.y=1.4;ctop.castShadow=true;pCar.add(ctop);
+const cwind=new THREE.Mesh(new THREE.BoxGeometry(2.3,.7,.1),M.glass);cwind.position.set(0,1.4,.87);pCar.add(cwind);
+const rwind=cwind.clone();rwind.position.z=-.87;pCar.add(rwind);
+[[1.1,.3,.95],[-.1,.3,.95],[1.1,.3,-.95],[-.1,.3,-.95]].forEach(([wx,wy,wz])=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(.35,.35,.28,10),M.black);w.rotation.z=Math.PI/2;w.position.set(wx,wy,wz);pCar.add(w);});
+pCar.position.set(0,2,10); scene.add(pCar);
+
 function buildHouse(){
   houseGrp.clear();
   const base=new THREE.Mesh(new THREE.BoxGeometry(6,4.5,6),M.brick);base.position.y=2.25;base.castShadow=true;houseGrp.add(base);
@@ -702,21 +713,47 @@ const cjHit=new THREE.Mesh(new THREE.BoxGeometry(3,5.5,3),new THREE.MeshBasicMat
 const keys={w:false,a:false,s:false,d:false};
 
 let jMove={x:0,y:0};
+function toggleDrive(){
+  if(cjState!=='driving' && cjGrp.position.distanceTo(pCar.position) < 5) {
+    cjState='driving'; cjGrp.visible=false; pCar.position.y=2.5; sfx('ok');
+  } else if(cjState==='driving') {
+    cjState='idle'; cjGrp.visible=true; cjGrp.position.copy(pCar.position); cjGrp.position.x-=3; pCar.position.y=2; sfx('click');
+  }
+}
 if(isMobile){
   setTimeout(()=>{
     const jm=nipplejs.create({zone:document.getElementById('joy-move'),mode:'static',position:{left:'50%',top:'50%'},color:'var(--g)'});
     jm.on('move',(e,d)=>{jMove={x:Math.cos(d.angle.radian)*d.distance/50,y:Math.sin(d.angle.radian)*d.distance/50};});
     jm.on('end',()=>jMove={x:0,y:0});
-    document.getElementById('mbtn-action').addEventListener('touchstart',e=>{e.preventDefault();/* Action (Vehicle) */});
+    document.getElementById('mbtn-action').addEventListener('touchstart',e=>{e.preventDefault(); toggleDrive(); });
     document.getElementById('mbtn-shoot').addEventListener('touchstart',e=>{e.preventDefault();if(cjState==='shoot_mode'||GD.curWeapon>=0)fireBullet();});
   },1000);
 }
 
 window.addEventListener('keydown',e=>{const k=e.key.toLowerCase();if('wasd'.includes(k)||k.includes('arrow')){e.preventDefault();}if(k==='w'||k==='arrowup')keys.w=true;if(k==='a'||k==='arrowleft')keys.a=true;if(k==='s'||k==='arrowdown')keys.s=true;if(k==='d'||k==='arrowright')keys.d=true;});
-window.addEventListener('keyup',e=>{const k=e.key.toLowerCase();if(k==='w'||k==='arrowup')keys.w=false;if(k==='a'||k==='arrowleft')keys.a=false;if(k==='s'||k==='arrowdown')keys.s=false;if(k==='d'||k==='arrowright')keys.d=false;});
-let walkCy=0,stepTm=0;
+window.addEventListener('keyup',e=>{const k=e.key.toLowerCase();if(k==='w'||k==='arrowup')keys.w=false;if(k==='a'||k==='arrowleft')keys.a=false;if(k==='s'||k==='arrowdown')keys.s=false;if(k==='d'||k==='arrowright')keys.d=false;if(k==='f')toggleDrive();});
+let walkCy=0,stepTm=0,carSpeed=0,carAngle=0;
 
 function updateWalk(dt){
+  if(cjState==='driving'){
+    let accel = 0;
+    if(isMobile && jMove.y) accel = -jMove.y * 30;
+    else if(keys.w) accel = 25;
+    else if(keys.s) accel = -15;
+    carSpeed = THREE.MathUtils.lerp(carSpeed, accel, dt * 2);
+    
+    let turn = 0;
+    if(isMobile && jMove.x) turn = -jMove.x * 2;
+    else if(keys.a) turn = 2;
+    else if(keys.d) turn = -2;
+    if(Math.abs(carSpeed)>1) carAngle += turn * dt * (carSpeed > 0 ? 1 : -1);
+    
+    pCar.rotation.y = carAngle;
+    pCar.position.x += Math.sin(carAngle) * carSpeed * dt;
+    pCar.position.z += Math.cos(carAngle) * carSpeed * dt;
+    controls.target.lerp(new THREE.Vector3(pCar.position.x,3,pCar.position.z),.1);
+    return;
+  }
   const spd=10*dt;let dx=0,dz=0,moved=false;
   const cd=new THREE.Vector3();camera.getWorldDirection(cd);cd.y=0;cd.normalize();
   const cr=new THREE.Vector3().crossVectors(cd,new THREE.Vector3(0,1,0)).normalize();
