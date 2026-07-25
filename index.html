@@ -388,7 +388,14 @@ let GD={
   quest:{type:0,target:0,amount:5,prog:0,reward:200},
 };
 let isMuted=false,curTab=0,curProd=0,curDeco='fence';
-let isStarted=false,cjState='idle',shootEnd=0,arrestEnd=0;
+let isStarted=false,cjState='idle',shootEnd=0,arrestEnd=0,cjHp=100,cjMaxHp=100;
+const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+if(isMobile) {
+  window.addEventListener('DOMContentLoaded', () => {
+    const mc = document.getElementById('mob-controls');
+    if(mc) mc.style.display='block';
+  });
+}
 let lastShot=0,passTimer=0;
 
 function savL(){localStorage.setItem(SAVE_KEY,JSON.stringify(GD));}
