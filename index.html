@@ -295,7 +295,7 @@ async function doLogin(){
     document.getElementById('ucardEl').innerText=`🟢 ${u}`;
     document.getElementById('welcomeMsg').innerText=`ยินดีต้อนรับ, ${u}! Login ครั้งที่ ${r.loginCount||1}`;
     msg.style.color='var(--g)';msg.innerText='เข้าสู่ระบบสำเร็จ! 🟢';
-    setTimeout(()=>{document.getElementById('loginScreen').style.display='none';document.getElementById('startScreen').style.display='flex';},700);
+    setTimeout(()=>{document.getElementById('loginScreen').style.display='none';document.getElementById('startScreen').style.display='flex';setTimeout(initMultiplayer,1000);},700);
   }else{msg.style.color='var(--r)';msg.innerText=r.message||'เข้าสู่ระบบไม่สำเร็จ';}
 }
 async function doReg(){
@@ -307,7 +307,7 @@ async function doReg(){
   if(r.success){msg.style.color='var(--g)';msg.innerText='สมัครสำเร็จ!';document.getElementById('lU').value=u;document.getElementById('lP').value=p;setTimeout(()=>{swLT(0);doLogin();},800);}
   else{msg.style.color='var(--r)';msg.innerText=r.message||'เกิดข้อผิดพลาด';}
 }
-function playGuest(){isGuest=true;document.getElementById('ucardEl').innerText='👤 แขก';document.getElementById('welcomeMsg').innerText='โหมดแขก (เซฟเฉพาะเครื่อง)';document.getElementById('loginScreen').style.display='none';document.getElementById('startScreen').style.display='flex';}
+function playGuest(){isGuest=true;document.getElementById('ucardEl').innerText='👤 แขก';document.getElementById('welcomeMsg').innerText='โหมดแขก (เซฟเฉพาะเครื่อง)';document.getElementById('loginScreen').style.display='none';document.getElementById('startScreen').style.display='flex';setTimeout(initMultiplayer,1000);}
 async function cloudSave(){
   savL();
   if(!currentUser||isGuest)return;
@@ -387,6 +387,46 @@ let GD={
   homies:[],  // array of tier indices
   quest:{type:0,target:0,amount:5,prog:0,reward:200},
 };
+
+let peer = null;
+let conn = null;
+let otherPlayers = {};
+
+function initMultiplayer() {
+  peer = new Peer();
+  peer.on('open', function(id) {
+    document.getElementById('my-peer-id').innerText = id;
+  });
+  peer.on('connection', function(c) {
+    conn = c;
+    setupConn();
+  });
+}
+
+function joinPeer() {
+  const id = document.getElementById('join-id').value.trim();
+  if(!id) return;
+  conn = peer.connect(id);
+  conn.on('open', setupConn);
+}
+
+function setupConn() {
+  document.getElementById('mp-status').innerText = 'สถานะ: เชื่อมต่อแล้ว! 🟢';
+  document.getElementById('mp-status').style.color = '#3aff3a';
+  conn.on('data', function(data) {
+    if(data.type === 'pos') {
+      if(!otherPlayers[data.id]) {
+        const op = new THREE.Mesh(new THREE.BoxGeometry(1.3,1.6,.9), new THREE.MeshStandardMaterial({color:0xff00ff}));
+        op.position.set(data.x, data.y, data.z);
+        scene.add(op);
+        otherPlayers[data.id] = {mesh: op};
+      }
+      otherPlayers[data.id].mesh.position.set(data.x, data.y, data.z);
+      otherPlayers[data.id].mesh.rotation.y = data.ry;
+    }
+  });
+}
+
 let isMuted=false,curTab=0,curProd=0,curDeco='fence';
 let isStarted=false,cjState='idle',shootEnd=0,arrestEnd=0,cjHp=100,cjMaxHp=100;
 const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
@@ -765,6 +805,7 @@ function updateWalk(dt){
     cjGrp.position.x=THREE.MathUtils.clamp(cjGrp.position.x+dx,-22,22);
     cjGrp.position.z=THREE.MathUtils.clamp(cjGrp.position.z+dz,-22,22);
     if(dx||dz)cjGrp.rotation.y=Math.atan2(dx,dz);
+    if(conn && conn.open) conn.send({type:'pos', id:peer.id, x:cjGrp.position.x, y:cjGrp.position.y, z:cjGrp.position.z, ry:cjGrp.rotation.y});
     walkCy+=dt*14;
     cjLL.position.z=Math.sin(walkCy)*.45;cjLL.rotation.x=Math.sin(walkCy)*.5;
     cjLR.position.z=Math.sin(walkCy+Math.PI)*.45;cjLR.rotation.x=Math.sin(walkCy+Math.PI)*.5;
@@ -1034,7 +1075,12 @@ function makePBar(hb){const b=document.createElement('div');b.className='pbc';co
 
 // Weapons
 function buyW(wi){const w=WEAPONS[wi];if(GD.weapons.includes(wi)){GD.curWeapon=wi;updWHUD();savL();sfx('click');flt(innerWidth/2,innerHeight/2,`ถือ ${w.icon} ${w.name}`,'#ffaa00');return;}if(GD.coins<w.cost){sfx('error');flt(innerWidth/2,innerHeight/2,'เงินไม่พอ!','#ff4444');return;}addCoins(-w.cost);GD.weapons.push(wi);GD.curWeapon=wi;updWHUD();savL();sfx('ok');flt(innerWidth/2,innerHeight/2,`ซื้อ ${w.icon}${w.name}!`,'#ffaa00');spawnParts('confetti',20,cjGrp.position.clone().add(new THREE.Vector3(0,6,0)));}
-function updWHUD(){const wc=document.getElementById('wcard');if(GD.curWeapon>=0){const w=WEAPONS[GD.curWeapon];wc.innerHTML=`${w.icon} ${w.name} | DMG:${w.dmg} | ${w.rate<500?'⚡เร็ว':'🐢ช้า'}`;wc.style.display='block';gunMesh.visible=gunBarrel.visible=true;}else{wc.style.display='none';gunMesh.visible=gunBarrel.visible=false;}}
+function updWHUD(){const wc=document.getElementById('wcard');if(GD.curWeapon>=0){const w=WEAPONS[GD.curWeapon];wc.innerHTML=`${w.icon} ${w.name} | DMG:${w.dmg} | ${w.rate<500?'⚡เร็ว':'🐢ช้า'}`;wc.style.display='block';gunMesh.visible=gunBarrel.visible=true;
+  if(w.model==='rpg') { gunMesh.geometry = new THREE.CylinderGeometry(.15,.15,1.5,8); gunMesh.material.color.setHex(0x445544); gunMesh.position.set(0,0,1.2); }
+  else if(w.name==='AK-47') { gunMesh.geometry = new THREE.BoxGeometry(.12,.3,1.2); gunMesh.material.color.setHex(0x5a3a18); gunMesh.position.set(0,-.15,1.6); }
+  else if(w.name==='ลูกซอง') { gunMesh.geometry = new THREE.BoxGeometry(.15,.25,1.0); gunMesh.material.color.setHex(0x222222); gunMesh.position.set(0,-.15,1.6); }
+  else { gunMesh.geometry = new THREE.BoxGeometry(.2,.4,.6); gunMesh.material.color.setHex(0x888888); gunMesh.position.set(0,-.15,1.6); }
+}else{wc.style.display='none';gunMesh.visible=gunBarrel.visible=false;}}
 
 // Luxuries
 function buyLux(li){const lu=LUXURIES[li];if(GD.luxuries.includes(li)){flt(innerWidth/2,innerHeight/2,'มีแล้ว!','#ffdd00');return;}if(GD.coins<lu.cost){sfx('error');flt(innerWidth/2,innerHeight/2,'เงินไม่พอ!','#ff4444');return;}addCoins(-lu.cost);placeLux(li);sfx('ok');flt(innerWidth/2,innerHeight/2,`${lu.icon}${lu.name}!`,'#ffcc33');spawnParts('confetti',40,new THREE.Vector3(0,8,0));}
@@ -1203,6 +1249,9 @@ document.getElementById('lP').addEventListener('keydown',e=>{if(e.key==='Enter')
 document.getElementById('lU').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 
 async function startGame(){
+  GD.gender = document.getElementById('ugender').value;
+  if(GD.gender === 'F') { cjGrp.children[0].material.color.setHex(0xff66aa); cjGrp.children[1].material.color.setHex(0x4444aa); cjGrp.children[2].material.color.setHex(0x4444aa); }
+  else { cjGrp.children[0].material.color.setHex(0xeeeeee); cjGrp.children[1].material.color.setHex(0x222255); cjGrp.children[2].material.color.setHex(0x222255); }
   await initAudio();
   loadG();
   buildHouse();
