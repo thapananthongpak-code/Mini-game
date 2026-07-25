@@ -926,6 +926,17 @@ const groundCast=new THREE.Mesh(new THREE.PlaneGeometry(600,600),new THREE.MeshB
 groundCast.rotation.x=-Math.PI/2;groundCast.position.y=3;scene.add(groundCast);
 
 
+
+let enemyBullets=[];
+function fireEnemyBullet(e){
+  const b=new THREE.Mesh(new THREE.SphereGeometry(.2,4,4),new THREE.MeshStandardMaterial({color:0xffaa00,emissive:0xff5500,emissiveIntensity:1}));
+  const start=e.mesh.position.clone();start.y=3;
+  const dir=new THREE.Vector3().subVectors(cjGrp.position.clone().add(new THREE.Vector3(0,2.5,0)),start).normalize();
+  b.position.copy(start);scene.add(b);
+  enemyBullets.push({mesh:b,dir,life:2,dmg:5});
+  sfx('shoot');
+}
+
 function takeDamage(dmg){
   if(cjState==='dead')return;
   cjHp-=dmg; sfx('hit');
