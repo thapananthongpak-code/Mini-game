@@ -260,6 +260,13 @@ input:focus{border-color:var(--y);box-shadow:0 0 10px rgba(255,221,0,.35);}
     <h1 style="color:var(--g);text-shadow:0 0 22px var(--g);font-size:2.4em;margin:0 0 4px;">GROVE STREET</h1>
     <p style="color:var(--y);margin:0 0 4px;font-size:.88em;" id="welcomeMsg">ยินดีต้อนรับ!</p>
     <p style="color:#666;font-size:.78em;margin:0 0 18px;">WASD เดิน | เมาส์ลาก หมุน | คลิก CJ รับควิซ</p>
+    <div style="margin:15px 0;">
+      <label style="color:var(--g);font-size:0.9em;margin-right:10px;">เลือกตัวละคร:</label>
+      <select id="ugender" style="padding:8px;border:2px solid var(--g);border-radius:5px;background:rgba(0,20,0,0.8);color:#fff;outline:none;">
+        <option value="M">ชาย (CJ)</option>
+        <option value="F">หญิง (Girl)</option>
+      </select>
+    </div>
     <button class="btn" style="font-size:1.25em;padding:12px 36px;background:var(--g);color:#000;border:none;" onclick="startGame()">▶ Grove Street, Home...</button>
   </div>
 </div>
@@ -404,7 +411,7 @@ function initMultiplayer() {
 }
 
 function joinPeer() {
-  const id = document.getElementById('join-id').value.trim();
+  const id = document.getElementById('join-peer-id').value.trim();
   if(!id) return;
   conn = peer.connect(id);
   conn.on('open', setupConn);
