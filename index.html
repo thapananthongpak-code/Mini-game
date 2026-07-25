@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Grove Street Crime City 3D</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{--g:#3aff3a;--y:#ffdd00;--r:#ff3333;--p:#cc44ff;--o:#ff8800;--c:#00ccff;--dk:rgba(6,16,6,0.92);}
@@ -70,6 +72,15 @@ input:focus{border-color:var(--y);box-shadow:0 0 10px rgba(255,221,0,.35);}
 .ltbtn{flex:1;padding:10px;background:transparent;border:none;color:#fff;font-family:inherit;font-weight:700;cursor:pointer;font-size:.95em;transition:.2s;}
 .ltbtn.on{background:var(--g);color:#000;}
 .ltbtn:hover:not(.on){background:rgba(58,255,58,.15);}
+
+/* Mobile Controls */
+#mob-controls{position:absolute;inset:0;pointer-events:none;z-index:15;display:none;}
+#joy-move{position:absolute;bottom:20px;left:20px;width:120px;height:120px;pointer-events:auto;}
+#mob-btns{position:absolute;bottom:30px;right:30px;display:flex;gap:15px;pointer-events:auto;}
+.mbtn{width:70px;height:70px;border-radius:50%;background:rgba(0,0,0,0.6);border:2px solid var(--g);color:#fff;font-size:1.8em;display:flex;justify-content:center;align-items:center;box-shadow:0 0 15px rgba(58,255,58,0.3);user-select:none;}
+.mbtn:active{background:var(--g);color:#000;}
+#dmgFlash{position:absolute;inset:0;background:rgba(255,0,0,0.4);pointer-events:none;opacity:0;transition:opacity 0.1s;z-index:999;}
+
 </style>
 </head>
 <body>
@@ -82,7 +93,12 @@ input:focus{border-color:var(--y);box-shadow:0 0 10px rgba(255,221,0,.35);}
     <h2>💵 $<span id="ucoin">0</span></h2>
     <div style="font-size:.88em;font-weight:700;">Respect Lv.<span id="ulv">1</span> &nbsp;<span style="color:var(--y);">🏙️<span id="uzone">0</span>/6</span> &nbsp;<span style="color:var(--c);">👥<span id="ucrew">0</span></span></div>
     <div class="bg"><div id="uexp" class="bf"></div></div>
+    
     <div style="font-size:.74em;text-align:right;margin-top:2px;"><span id="uexptxt">0/120</span> REP</div>
+    <div style="width:100%;height:14px;background:rgba(0,0,0,.8);border-radius:7px;overflow:hidden;margin-top:8px;border:2px solid var(--r);">
+      <div id="uhp" style="height:100%;background:var(--r);width:100%;transition:width .2s;"></div>
+    </div>
+
   </div>
   <div id="passHUD"><div class="pcard" id="passCard">💰 $0/นาที | 0 เขต</div></div>
   <div id="userHUD"><div class="ucard" id="ucardEl">🟢 Guest</div></div>
@@ -193,6 +209,25 @@ input:focus{border-color:var(--y);box-shadow:0 0 10px rgba(255,221,0,.35);}
   </div>
 </div>
 
+
+<div id="dmgFlash"></div>
+<!-- Mobile Controls -->
+<div id="mob-controls">
+  <div id="joy-move"></div>
+  <div id="mob-btns">
+    <div class="mbtn" id="mbtn-action">🚗</div>
+    <div class="mbtn" id="mbtn-shoot">🔫</div>
+  </div>
+</div>
+
+
+<div id="mp-ui" style="position:absolute;top:10px;right:10px;z-index:20;background:rgba(0,0,0,0.8);padding:10px;border:2px solid var(--g);border-radius:10px;color:white;display:none;">
+  <h3>🌐 เล่นออนไลน์ (PeerJS)</h3>
+  <div style="margin-bottom:5px;">ID ของคุณ: <span id="my-peer-id" style="color:var(--g);">กำลังโหลด...</span></div>
+  <input type="text" id="join-peer-id" placeholder="ใส่ ID ของเพื่อน" style="width:100%;margin-bottom:5px;">
+  <button class="ibtn" onclick="joinPeer()">🔗 เข้าห้องเพื่อน</button>
+</div>
+
 <!-- Login Screen -->
 <div id="loginScreen" class="ov">
   <div class="panel modal" style="background:rgba(4,10,4,.97);">
@@ -301,6 +336,8 @@ const PRODS=[
   {name:'เพชรเทียม',icon:'💎',cost:5000,sell:25000,grow:50,color:0xee88ff,lv:4,exp:400},
 ];
 const WEAPONS=[
+  {name:'RPG (ระเบิด)',cost:10000,dmg:100,spd:8,icon:'🚀',model:'rpg'},
+
   {name:'ปืนสั้น',icon:'🔫',cost:500,  dmg:1,rate:800 },
   {name:'Tec-9', icon:'🔫',cost:2000, dmg:2,rate:200 },
   {name:'ลูกซอง',icon:'💥',cost:3500, dmg:5,rate:1200},
@@ -656,6 +693,18 @@ const cjHit=new THREE.Mesh(new THREE.BoxGeometry(3,5.5,3),new THREE.MeshBasicMat
 
 // Walking
 const keys={w:false,a:false,s:false,d:false};
+
+let jMove={x:0,y:0};
+if(isMobile){
+  setTimeout(()=>{
+    const jm=nipplejs.create({zone:document.getElementById('joy-move'),mode:'static',position:{left:'50%',top:'50%'},color:'var(--g)'});
+    jm.on('move',(e,d)=>{jMove={x:Math.cos(d.angle.radian)*d.distance/50,y:Math.sin(d.angle.radian)*d.distance/50};});
+    jm.on('end',()=>jMove={x:0,y:0});
+    document.getElementById('mbtn-action').addEventListener('touchstart',e=>{e.preventDefault();/* Action (Vehicle) */});
+    document.getElementById('mbtn-shoot').addEventListener('touchstart',e=>{e.preventDefault();if(cjState==='shoot_mode'||GD.curWeapon>=0)fireBullet();});
+  },1000);
+}
+
 window.addEventListener('keydown',e=>{const k=e.key.toLowerCase();if('wasd'.includes(k)||k.includes('arrow')){e.preventDefault();}if(k==='w'||k==='arrowup')keys.w=true;if(k==='a'||k==='arrowleft')keys.a=true;if(k==='s'||k==='arrowdown')keys.s=true;if(k==='d'||k==='arrowright')keys.d=true;});
 window.addEventListener('keyup',e=>{const k=e.key.toLowerCase();if(k==='w'||k==='arrowup')keys.w=false;if(k==='a'||k==='arrowleft')keys.a=false;if(k==='s'||k==='arrowdown')keys.s=false;if(k==='d'||k==='arrowright')keys.d=false;});
 let walkCy=0,stepTm=0;
@@ -831,6 +880,26 @@ let enemies=[],bullets=[],moneyDrops=[];
 const ray=new THREE.Raycaster();const mouse=new THREE.Vector2();
 const groundCast=new THREE.Mesh(new THREE.PlaneGeometry(600,600),new THREE.MeshBasicMaterial({visible:false}));
 groundCast.rotation.x=-Math.PI/2;groundCast.position.y=3;scene.add(groundCast);
+
+
+function takeDamage(dmg){
+  if(cjState==='dead')return;
+  cjHp-=dmg; sfx('hit');
+  document.getElementById('dmgFlash').style.opacity=1;
+  setTimeout(()=>document.getElementById('dmgFlash').style.opacity=0, 150);
+  if(cjHp<=0){
+    cjState='dead'; sfx('error');
+    flt(innerWidth/2,innerHeight/2,'WASTED! -$500','#ff3333');
+    addCoins(-500);
+    setTimeout(()=>{
+      cjHp=cjMaxHp; cjState='idle';
+      cjGrp.position.set(0,2,0); shootEnd=0;
+      enemies.forEach(e=>{scene.remove(e.mesh);e.hpEl.c.remove();e.nl.remove();}); enemies.length=0;
+      document.getElementById('uhp').style.width=`${(cjHp/cjMaxHp)*100}%`;
+    },3000);
+  }
+  document.getElementById('uhp').style.width=`${(cjHp/cjMaxHp)*100}%`;
+}
 
 function spawnEnemy(){
   if(enemies.length>=9)return;
